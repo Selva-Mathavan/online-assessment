@@ -1,5 +1,4 @@
-// src/App.jsx
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 const LS_TOKEN = 'assessment_token_v1';
@@ -14,7 +13,7 @@ function saveLocalAnswers(obj) { localStorage.setItem(LS_LOCAL_ANSWERS, JSON.str
 function readLocalAnswers() { try { return JSON.parse(localStorage.getItem(LS_LOCAL_ANSWERS)); } catch { return {}; } }
 
 export default function App() {
-  const [stage, setStage] = useState('intro'); // intro | running | done
+  const [stage, setStage] = useState('intro');
   const [token, setToken] = useState(readToken());
   const [attemptInfo, setAttemptInfo] = useState(readAttemptInfo());
   const [questions, setQuestions] = useState([]);
@@ -31,7 +30,7 @@ export default function App() {
 
   const timerRef = useRef(null);
   useEffect(() => {
-    timerRef.current = setInterval(() => setNow(Date.now()), 1000);
+    timerRef.current = setInterval(()=> setNow(Date.now()), 1000);
     return () => clearInterval(timerRef.current);
   }, []);
   useEffect(() => { saveLocalAnswers(answers); }, [answers]);
@@ -49,42 +48,33 @@ export default function App() {
     }
   }, [timeLeftMs, stage, attemptId, isSubmitting]);
 
-  // Central fetch wrapper
   async function apiFetch(path, opts = {}) {
-    const headers = opts.headers ? { ...opts.headers } : {};
+    const headers = opts.headers ? {...opts.headers} : {};
     const t = token || readToken();
-    if (t) headers['Authorization'] = `Bearer ${t}`;
-
-    let body = opts.body;
-    if (body && !(body instanceof FormData)) {
+    if (t) headers['Authorization'] = Bearer ;
+    if (opts.body && !(opts.body instanceof FormData)) {
       headers['Content-Type'] = 'application/json';
-      body = JSON.stringify(body);
+      opts.body = JSON.stringify(opts.body);
     }
-
-    const url = `${API_BASE}${path}`;
-    const res = await fetch(url, { ...opts, headers, body });
-
+    const res = await fetch(${API_BASE}, { ...opts, headers });
     if (!res.ok) {
-      const txt = await res.text().catch(() => null);
-      const err = new Error('API error: ' + (txt || res.status));
+      const txt = await res.text().catch(()=>null);
+      let err = new Error('API error: ' + (txt || res.status));
       err.status = res.status;
       err.body = txt;
       throw err;
     }
-
     const ct = res.headers.get('content-type') || '';
     if (ct.includes('application/json')) return res.json();
     return res.text();
   }
 
-  // Create candidate and save token locally
   async function createCandidateAndSave(name, email) {
     const data = await apiFetch('/candidates', { method: 'POST', body: { name, email } });
-    if (data?.token) { saveToken(data.token); setToken(data.token); }
+    if (data.token) { saveToken(data.token); setToken(data.token); }
     return data;
   }
 
-  // Start attempt: create attempt and fetch questions for the test
   async function startAttemptFlow(testId = 1) {
     try {
       if (!token) {
@@ -92,49 +82,30 @@ export default function App() {
         if (!name || !email) { alert('Please enter name and email before starting the test.'); return; }
         await createCandidateAndSave(name, email);
       }
-
-      // start attempt for testId
-      const start = await apiFetch(`/tests/${testId}/start`, { method: 'POST' });
-      if (!start?.attempt_id) throw new Error('Invalid start response');
-
-      const ai = {
-        attempt_id: start.attempt_id,
-        started_at: start.started_at,
-        expires_at: start.expires_at,
-        test_id: testId
-      };
-      saveAttemptInfo(ai);
-      setAttemptInfo(ai);
-      setAttemptId(start.attempt_id);
-      setStartedAtMs(new Date(start.started_at).getTime());
-      setExpiresAtMs(new Date(start.expires_at).getTime());
+      const start = await apiFetch(/tests//start, { method: 'POST' });
+      const ai = { attempt_id: start.attempt_id, started_at: start.started_at, expires_at: start.expires_at, test_id: testId };
+      saveAttemptInfo(ai); setAttemptInfo(ai); setAttemptId(start.attempt_id);
+      setStartedAtMs(new Date(start.started_at).getTime()); setExpiresAtMs(new Date(start.expires_at).getTime());
       setStage('running');
-
-      // fetch questions for the test
-      const qres = await apiFetch(`/tests/${testId}/questions`);
-      setQuestions(qres.questions || qres || []);
+      const qres = await apiFetch(/tests//questions);
+      setQuestions(qres.questions || []);
     } catch (e) {
       console.error('Failed to start attempt', e);
-      alert('Failed to start test: ' + (e?.message || JSON.stringify(e)));
+      alert('Failed to start test: ' + (e.message || JSON.stringify(e)));
     }
   }
 
-  // Save answer locally
   function localSaveAnswer(qId, choiceIdx) {
     setAnswers(prev => {
-      const next = { ...prev, [qId]: { choiceIndex: choiceIdx, savedAt: Date.now() } };
+      const next = {...prev, [qId]: { choiceIndex: choiceIdx, savedAt: Date.now() }};
       saveLocalAnswers(next);
       return next;
     });
   }
 
-  // Save answer remotely (best-effort)
   async function saveAnswerRemote(attemptIdLocal, questionId, selectedChoiceIndex) {
     try {
-      await apiFetch(`/attempts/${attemptIdLocal}/answer`, {
-        method: 'POST',
-        body: { question_id: questionId, selected_choice_index: selectedChoiceIndex }
-      });
+      await apiFetch(/attempts//answer, { method: 'POST', body: { question_id: questionId, selected_choice_index: selectedChoiceIndex } });
       return true;
     } catch (e) {
       console.warn('remote save failed', e);
@@ -146,17 +117,15 @@ export default function App() {
     localSaveAnswer(qId, choiceIdx);
     const ai = readAttemptInfo();
     if (ai?.attempt_id) {
-      // fire-and-forget remote save
-      saveAnswerRemote(ai.attempt_id, qId, choiceIdx).catch(() => {});
+      saveAnswerRemote(ai.attempt_id, qId, choiceIdx).catch(()=>{});
     }
   }
 
-  // Submit attempt
   async function submitAttemptRemote(attemptIdLocal) {
     if (!attemptIdLocal) throw new Error('No attempt id');
     setIsSubmitting(true);
     try {
-      const res = await apiFetch(`/attempts/${attemptIdLocal}/submit`, { method: 'POST' });
+      const res = await apiFetch(/attempts//submit, { method: 'POST' });
       setScoreResult(res);
       setStage('done');
       return res;
@@ -167,53 +136,32 @@ export default function App() {
 
   function formatTime(ms) {
     if (ms == null) return '--:--';
-    const s = Math.max(0, Math.floor(ms / 1000));
-    const m = Math.floor(s / 60);
+    const s = Math.floor(ms/1000);
+    const m = Math.floor(s/60);
     const sec = s % 60;
-    const mm = String(m).padStart(2, '0');
-    const ss = String(sec).padStart(2, '0');
-    return `${mm}:${ss}`;
+    return ${m}:;
   }
 
   return (
     <div style={{ maxWidth: 900, margin: 20, fontFamily: 'Inter, Arial, sans-serif' }}>
-      <h1>Online Assessment — Basic (Dev)</h1>
+      <h1>Online Assessment — Basic</h1>
 
       {stage === 'intro' && (
         <div>
-          <p>Test: Sample Test. Duration: 5 minutes (dev).</p>
+          <p>Test: Sample Test (30 questions). Duration: 5 minutes (dev).</p>
           <div style={{ marginTop: 12, maxWidth: 480 }}>
             <label style={{ display: 'block', marginBottom: 8 }}>
               Your name
-              <input
-                type="text"
-                value={candidateName}
-                onChange={(e) => setCandidateName(e.target.value)}
-                placeholder="Enter your name"
-                style={{ display: 'block', width: '100%', padding: 8, marginTop: 6 }}
-              />
+              <input type="text" value={candidateName} onChange={(e)=>setCandidateName(e.target.value)} placeholder="Enter your name" style={{ display: 'block', width: '100%', padding: 8, marginTop: 6 }} />
             </label>
-
             <label style={{ display: 'block', marginBottom: 8 }}>
               Your email
-              <input
-                type="email"
-                value={candidateEmail}
-                onChange={(e) => setCandidateEmail(e.target.value)}
-                placeholder="you@example.com"
-                style={{ display: 'block', width: '100%', padding: 8, marginTop: 6 }}
-              />
+              <input type="email" value={candidateEmail} onChange={(e)=>setCandidateEmail(e.target.value)} placeholder="you@example.com" style={{ display: 'block', width: '100%', padding: 8, marginTop: 6 }} />
             </label>
-
             <div style={{ marginTop: 12 }}>
-              <button onClick={() => startAttemptFlow(1)} disabled={!candidateName || !candidateEmail}>
-                Start Test
-              </button>
+              <button onClick={()=>startAttemptFlow(1)} disabled={!candidateName || !candidateEmail}>Start Test</button>
             </div>
-
-            <div style={{ marginTop: 10, fontSize: 12, color: '#777' }}>
-              The test will create a candidate profile using name & email, then start the timed attempt.
-            </div>
+            <div style={{ marginTop: 10, fontSize: 12, color: '#777' }}>The test will create a candidate profile using name & email, then start the timed attempt.</div>
           </div>
         </div>
       )}
@@ -228,32 +176,24 @@ export default function App() {
           <div style={{ marginTop: 12 }}>
             {questions.length === 0 && <div>Loading questions...</div>}
             {questions.map((q, idx) => (
-              <div key={q.id ?? idx} style={{ border: '1px solid #ddd', padding: 12, borderRadius: 8, marginBottom: 8 }}>
-                <div><strong>Q {idx + 1}:</strong> {q.text}</div>
+              <div key={q.id} style={{ border: '1px solid #ddd', padding: 12, borderRadius: 8, marginBottom: 8 }}>
+                <div><strong>Q {idx+1}:</strong> {q.text}</div>
                 <div style={{ marginTop: 8 }}>
-                  {Array.isArray(q.choices) ? q.choices.map((c, ci) => {
+                  {q.choices.map((c, ci) => {
                     const selected = answers[q.id] && answers[q.id].choiceIndex === ci;
                     return (
                       <label key={ci} style={{ display: 'block', padding: '6px 0', cursor: 'pointer' }}>
-                        <input
-                          type="radio"
-                          name={`q_${q.id ?? idx}`}
-                          checked={!!selected}
-                          onChange={() => handleSelect(q.id, ci)}
-                        />{' '}
-                        {c}
+                        <input type="radio" name={q_} checked={selected || false} onChange={()=>handleSelect(q.id, ci)} /> {c}
                       </label>
                     );
-                  }) : <div>No choices</div>}
+                  })}
                 </div>
               </div>
             ))}
           </div>
 
           <div style={{ marginTop: 12 }}>
-            <button onClick={() => submitAttemptRemote(attemptId)} disabled={isSubmitting}>
-              Submit Now
-            </button>
+            <button onClick={()=>submitAttemptRemote(attemptId)} disabled={isSubmitting}>Submit Now</button>
           </div>
         </div>
       )}
@@ -263,16 +203,10 @@ export default function App() {
           <h2>Completed</h2>
           {scoreResult ? (
             <div>
-              <p>
-                Score: {scoreResult.score} / {scoreResult.total} ({Math.round((scoreResult.score / scoreResult.total) * 100)}%)
-              </p>
+              <p>Score: {scoreResult.score} / {scoreResult.total} ({Math.round((scoreResult.score/scoreResult.total)*100)}%)</p>
             </div>
           ) : <div>Submitted — awaiting result...</div>}
-          <div style={{ marginTop: 12 }}>
-            <button onClick={() => { localStorage.clear(); window.location.reload(); }}>
-              Clear & Restart
-            </button>
-          </div>
+          <div style={{ marginTop: 12 }}><button onClick={()=>{ localStorage.clear(); window.location.reload(); }}>Clear & Restart</button></div>
         </div>
       )}
 
